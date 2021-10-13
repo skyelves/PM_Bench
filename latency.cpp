@@ -25,17 +25,9 @@ using namespace std::chrono;
 #define CACHELINESIZE (64)
 #define NUM_THREADS 5
 
-#define Time_BODY(condition, name, func)                                                        \
-    if(condition) {                                                                             \
-        sleep(1);                                                                               \
-        timeval start, ends;                                                                    \
-        gettimeofday(&start, NULL);                                                             \
-        func                                                                                    \
-        gettimeofday(&ends, NULL);                                                              \
-        double timeCost = (ends.tv_sec - start.tv_sec) * 1000000 + ends.tv_usec - start.tv_usec;\
-        double throughPut = (double) testNum / timeCost;                                        \
-        cout << throughPut << ", " << endl;                                                     \
-    }
+string pm_file = "/media/pmem0/ke/pm_bench_pm";
+string ssd_file = "/home/ke_wang/test/pm_bench_ssd";
+uint64_t object_size = 256;
 
 inline void mfence(void) {
     asm volatile("mfence":: :"memory");
@@ -49,10 +41,6 @@ inline void clflush(char *data, size_t len) {
     }
     mfence();
 }
-
-string pm_file = "/media/pmem0/ke/pm_bench_pm";
-string ssd_file = "/home/ke_wang/test/pm_bench_ssd";
-uint64_t object_size = 64;
 
 pthread_t tids[NUM_THREADS];
 
@@ -91,7 +79,18 @@ void create_index() {
 }
 
 uint64_t read_dram(uint64_t _size) {
-
+    uint64_t total_delay = 0;
+    char *temp_content = new char[_size + 1];
+    struct timespec t1, t2;
+    for (int i = 0; i < start_index_len; ++i) {
+        uint64_t offset = start_index[i];
+        clock_gettime(CLOCK_REALTIME, &t1);
+        strncpy(temp_content, dram_addr + offset, _size);
+        clock_gettime(CLOCK_REALTIME, &t2);
+        total_delay += (uint64_t) (t2.tv_sec - t1.tv_sec) * 1000000000LL + (t2.tv_nsec - t1.tv_nsec);
+        clflush(dram_addr + offset, _size);
+    }
+    return total_delay / start_index_len;
 }
 
 uint64_t write_dram(uint64_t _size) {
@@ -100,10 +99,68 @@ uint64_t write_dram(uint64_t _size) {
     for (int i = 0; i < start_index_len; ++i) {
         uint64_t offset = start_index[i];
         clock_gettime(CLOCK_REALTIME, &t1);
-        strcpy(dram_addr + offset, content);
+        strncpy(dram_addr + offset, content, _size);
         clock_gettime(CLOCK_REALTIME, &t2);
         total_delay += (uint64_t) (t2.tv_sec - t1.tv_sec) * 1000000000LL + (t2.tv_nsec - t1.tv_nsec);
-        clflush(dram_addr + offset, object_size);
+        clflush(dram_addr + offset, _size);
+    }
+    return total_delay / start_index_len;
+}
+
+uint64_t read_pm(uint64_t _size) {
+    uint64_t total_delay = 0;
+    char *temp_content = new char[_size + 1];
+    struct timespec t1, t2;
+    for (int i = 0; i < start_index_len; ++i) {
+        uint64_t offset = start_index[i];
+        clock_gettime(CLOCK_REALTIME, &t1);
+        strncpy(temp_content, pm_addr + offset, _size);
+        clock_gettime(CLOCK_REALTIME, &t2);
+        total_delay += (uint64_t) (t2.tv_sec - t1.tv_sec) * 1000000000LL + (t2.tv_nsec - t1.tv_nsec);
+        clflush(pm_addr + offset, _size);
+    }
+    return total_delay / start_index_len;
+}
+
+uint64_t write_pm(uint64_t _size) {
+    uint64_t total_delay = 0;
+    struct timespec t1, t2;
+    for (int i = 0; i < start_index_len; ++i) {
+        uint64_t offset = start_index[i];
+        clock_gettime(CLOCK_REALTIME, &t1);
+        strncpy(pm_addr + offset, content, _size);
+        clock_gettime(CLOCK_REALTIME, &t2);
+        total_delay += (uint64_t) (t2.tv_sec - t1.tv_sec) * 1000000000LL + (t2.tv_nsec - t1.tv_nsec);
+        clflush(pm_addr + offset, _size);
+    }
+    return total_delay / start_index_len;
+}
+
+uint64_t read_ssd(uint64_t _size) {
+    uint64_t total_delay = 0;
+    char *temp_content = new char[_size + 1];
+    struct timespec t1, t2;
+    for (int i = 0; i < start_index_len; ++i) {
+        uint64_t offset = start_index[i];
+        clock_gettime(CLOCK_REALTIME, &t1);
+        strncpy(temp_content, ssd_addr + offset, _size);
+        clock_gettime(CLOCK_REALTIME, &t2);
+        total_delay += (uint64_t) (t2.tv_sec - t1.tv_sec) * 1000000000LL + (t2.tv_nsec - t1.tv_nsec);
+        clflush(ssd_addr + offset, _size);
+    }
+    return total_delay / start_index_len;
+}
+
+uint64_t write_ssd(uint64_t _size) {
+    uint64_t total_delay = 0;
+    struct timespec t1, t2;
+    for (int i = 0; i < start_index_len; ++i) {
+        uint64_t offset = start_index[i];
+        clock_gettime(CLOCK_REALTIME, &t1);
+        strncpy(ssd_addr + offset, content, _size);
+        clock_gettime(CLOCK_REALTIME, &t2);
+        total_delay += (uint64_t) (t2.tv_sec - t1.tv_sec) * 1000000000LL + (t2.tv_nsec - t1.tv_nsec);
+        clflush(ssd_addr + offset, _size);
     }
     return total_delay / start_index_len;
 }
@@ -121,8 +178,15 @@ void benchmark() {
     create_index();
 
     write_dram_latency = write_dram(object_size);
+    read_dram_latency = read_dram(object_size);
+    write_pm_latency = write_pm(object_size);
+    read_pm_latency = read_pm(object_size);
+    write_ssd_latency = write_ssd(object_size);
+    read_ssd_latency = read_ssd(object_size);
 
-    cout << write_dram_latency << endl;
+    cout << "DRAM, " << read_dram_latency << ", " << write_dram_latency << endl;
+    cout << "DRAM, " << read_pm_latency << ", " << write_pm_latency << endl;
+    cout << "DRAM, " << read_ssd_latency << ", " << write_ssd_latency << endl;
 }
 
 int main() {
