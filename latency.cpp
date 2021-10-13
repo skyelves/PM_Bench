@@ -14,6 +14,7 @@
 #include <iostream>
 #include <pthread.h>
 #include <sys/timeb.h>
+#include <inttypes.h>
 #include "rng/rng.h"
 
 using namespace std;
@@ -21,13 +22,13 @@ using namespace std::chrono;
 
 #define MAP_SYNC 0x080000 /* perform synchronous page faults for the mapping */
 #define MAP_SHARED_VALIDATE 0x03    /* share + validate extension flags */
-#define ALLOC_SIZE ((size_t)4<<30) // 4GB
 #define CACHELINESIZE (64)
 #define NUM_THREADS 5
 
 string pm_file = "/media/pmem0/ke/pm_bench_pm";
 string ssd_file = "/home/ke_wang/test/pm_bench_ssd";
 uint64_t object_size = 256;
+uint64_t alloc_size = ((uint64_t)32)<<30; // 32GB
 
 inline void mfence(void) {
     asm volatile("mfence":: :"memory");
@@ -52,27 +53,27 @@ void init_addr() {
     uint64_t pm_fd = open(pm_file.c_str(), O_CREAT | O_RDWR, 0644);
     uint64_t ssd_fd = open(ssd_file.c_str(), O_CREAT | O_RDWR, 0644);
 #ifdef __linux__
-    if (posix_fallocate(pm_fd, 0, ALLOC_SIZE) < 0){
+    if (posix_fallocate(pm_fd, 0, alloc_size) < 0){
         puts("pm fallocate fail\n");
         exit(-1);
     }
-    if (posix_fallocate(ssd_fd, 0, ALLOC_SIZE) < 0){
+    if (posix_fallocate(ssd_fd, 0, alloc_size) < 0){
         puts("ssd fallocate fail\n");
         exit(-1);
     }
 #endif
-    dram_addr = (char *) malloc(ALLOC_SIZE);
-    pm_addr = (char *) mmap(NULL, ALLOC_SIZE, PROT_READ | PROT_WRITE, MAP_SYNC | MAP_SHARED_VALIDATE, pm_fd, 0);
-    ssd_addr = (char *) mmap(NULL, ALLOC_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, ssd_fd, 0);
+    dram_addr = (char *) malloc(alloc_size);
+    pm_addr = (char *) mmap(NULL, alloc_size, PROT_READ | PROT_WRITE, MAP_SYNC | MAP_SHARED_VALIDATE, pm_fd, 0);
+    ssd_addr = (char *) mmap(NULL, alloc_size, PROT_READ | PROT_WRITE, MAP_SHARED, ssd_fd, 0);
     close(pm_fd);
     close(ssd_fd);
 }
 
-void create_index() {
+void create_index(uint64_t _size) {
     start_index = new uint64_t[start_index_len];
     rng r;
     rng_init(&r, 1, 2);
-    uint64_t right_limit = ALLOC_SIZE - 2 * object_size;
+    uint64_t right_limit = alloc_size - 2 * _size;
     for (int i = 0; i < start_index_len; ++i) {
         start_index[i] = rng_next(&r) % right_limit;
     }
@@ -166,32 +167,36 @@ uint64_t write_ssd(uint64_t _size) {
 }
 
 
-void benchmark() {
+void benchmark(uint64_t _size) {
     uint64_t read_dram_latency = 0, write_dram_latency = 0;
     uint64_t read_pm_latency = 0, write_pm_latency = 0;
     uint64_t read_ssd_latency = 0, write_ssd_latency = 0;
-    content = new char[object_size + 1];
-    for (int i = 0; i < object_size; ++i) {
+
+    content = new char[_size + 1];
+    for (int i = 0; i < _size; ++i) {
         content[i] = 'a' + (i % 26);
     }
-    content[object_size - 1] = '\0';
-    create_index();
+    content[_size - 1] = '\0';
 
-    write_dram_latency = write_dram(object_size);
-    read_dram_latency = read_dram(object_size);
-    write_pm_latency = write_pm(object_size);
-    read_pm_latency = read_pm(object_size);
-    write_ssd_latency = write_ssd(object_size);
-    read_ssd_latency = read_ssd(object_size);
+    start_index_len = (2<<23) / _size;
+    create_index(_size);
 
-    cout << "DRAM, " << read_dram_latency << ", " << write_dram_latency << endl;
-    cout << "DRAM, " << read_pm_latency << ", " << write_pm_latency << endl;
-    cout << "DRAM, " << read_ssd_latency << ", " << write_ssd_latency << endl;
+    write_dram_latency = write_dram(_size);
+    read_dram_latency = read_dram(_size);
+    write_pm_latency = write_pm(_size);
+    read_pm_latency = read_pm(_size);
+    write_ssd_latency = write_ssd(_size);
+    read_ssd_latency = read_ssd(_size);
+
+    cout << read_dram_latency << ", " << write_dram_latency << ", " << read_pm_latency << ", " << write_pm_latency
+         << ", " << read_ssd_latency << ", " << write_ssd_latency << endl;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    sscanf(argv[1], "%" SCNu64 , &object_size);
+//    sscanf(argv[2], "%" SCNu64 , &alloc_size); //GB
+//    alloc_size = alloc_size << 30;
     init_addr();
-    benchmark();
-
+    benchmark(object_size);
     return 0;
 }
