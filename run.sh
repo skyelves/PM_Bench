@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+cmake -DCMAKE_BUILD_TYPE=Debug .
 make
 
 echo "size, d_r, d_w, p_r, p_w, s_r, s_w"

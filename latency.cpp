@@ -64,9 +64,15 @@ void init_addr() {
 #endif
     dram_addr = (char *) malloc(alloc_size);
     pm_addr = (char *) mmap(NULL, alloc_size, PROT_READ | PROT_WRITE, MAP_SYNC | MAP_SHARED_VALIDATE, pm_fd, 0);
-    ssd_addr = (char *) mmap(NULL, alloc_size, PROT_READ | PROT_WRITE, MAP_SHARED, ssd_fd, 0);
+    ssd_addr = (char *) mmap(NULL, alloc_size, PROT_READ | PROT_WRITE, O_SYNC | MAP_SHARED, ssd_fd, 0);
     close(pm_fd);
     close(ssd_fd);
+}
+
+void free_addr() {
+    delete[]dram_addr;
+    munmap(pm_addr, alloc_size);
+    munmap(ssd_addr, alloc_size);
 }
 
 void create_index(uint64_t _size) {
@@ -76,7 +82,7 @@ void create_index(uint64_t _size) {
     uint64_t right_limit = alloc_size - 2 * _size;
     for (int i = 0; i < start_index_len; ++i) {
         start_index[i] = rng_next(&r) % right_limit;
-        cout << start_index[i] << endl;
+//        cout << start_index[i] << endl;
     }
 }
 
@@ -102,6 +108,7 @@ uint64_t write_dram(uint64_t _size) {
         uint64_t offset = start_index[i];
         clock_gettime(CLOCK_REALTIME, &t1);
         strncpy(dram_addr + offset, content, _size);
+//        clflush(dram_addr + offset, _size);
         clock_gettime(CLOCK_REALTIME, &t2);
         total_delay += (uint64_t) (t2.tv_sec - t1.tv_sec) * 1000000000LL + (t2.tv_nsec - t1.tv_nsec);
         clflush(dram_addr + offset, _size);
@@ -131,6 +138,7 @@ uint64_t write_pm(uint64_t _size) {
         uint64_t offset = start_index[i];
         clock_gettime(CLOCK_REALTIME, &t1);
         strncpy(pm_addr + offset, content, _size);
+//        clflush(pm_addr + offset, _size);
         clock_gettime(CLOCK_REALTIME, &t2);
         total_delay += (uint64_t) (t2.tv_sec - t1.tv_sec) * 1000000000LL + (t2.tv_nsec - t1.tv_nsec);
         clflush(pm_addr + offset, _size);
@@ -160,6 +168,7 @@ uint64_t write_ssd(uint64_t _size) {
         uint64_t offset = start_index[i];
         clock_gettime(CLOCK_REALTIME, &t1);
         strncpy(ssd_addr + offset, content, _size);
+//        fsync(2);
         clock_gettime(CLOCK_REALTIME, &t2);
         total_delay += (uint64_t) (t2.tv_sec - t1.tv_sec) * 1000000000LL + (t2.tv_nsec - t1.tv_nsec);
         clflush(ssd_addr + offset, _size);
@@ -179,7 +188,7 @@ void benchmark(uint64_t _size) {
     }
     content[_size - 1] = '\0';
 
-    start_index_len = (2 << 23) / _size;
+    start_index_len = (2 << 20) / _size;
     create_index(_size);
 
     write_dram_latency = write_dram(_size);
@@ -198,5 +207,6 @@ int main(int argc, char *argv[]) {
 //    sscanf(argv[2], "%" SCNu64 , &alloc_size);
     init_addr();
     benchmark(object_size);
+    free_addr();
     return 0;
 }
