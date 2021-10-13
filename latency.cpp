@@ -37,7 +37,7 @@ using namespace std::chrono;
 
 pthread_t tids[NUM_THREADS];
 
-string pm_file = "/media/pmem0/pm_bench_pm";
+string pm_file = "/media/pmem0/ke/pm_bench_pm";
 string ssd_file = "/home/ke_wang/test/pm_bench_ssd";
 
 char *dram_addr = NULL, *pm_addr = NULL, *ssd_addr = NULL;
