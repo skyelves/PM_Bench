@@ -58,7 +58,7 @@ pthread_t tids[NUM_THREADS];
 
 char *dram_addr = NULL, *pm_addr = NULL, *ssd_addr = NULL, *content = NULL;
 uint64_t *start_index = NULL;
-uint64_t start_index_len = 2 << 20;
+uint64_t start_index_len = 1000000;
 
 void init_addr() {
     uint64_t pm_fd = open(pm_file.c_str(), O_CREAT | O_RDWR, 0644);
@@ -84,7 +84,7 @@ void create_index() {
     start_index = new uint64_t[start_index_len];
     rng r;
     rng_init(&r, 1, 2);
-    uint64_t right_limit = ALLOC_SIZE - object_size;
+    uint64_t right_limit = ALLOC_SIZE - 2 * object_size;
     for (int i = 0; i < start_index_len; ++i) {
         start_index[i] = rng_next(&r) % right_limit;
     }
@@ -98,13 +98,14 @@ uint64_t write_dram(uint64_t _size) {
     uint64_t total_delay = 0;
     struct timespec t1, t2;
     for (int i = 0; i < start_index_len; ++i) {
-        int offset = start_index[i];
+        uint64_t offset = start_index[i];
         clock_gettime(CLOCK_REALTIME, &t1);
         strcpy(dram_addr + offset, content);
         clock_gettime(CLOCK_REALTIME, &t2);
         total_delay += (uint64_t) (t2.tv_sec - t1.tv_sec) * 1000000000LL + (t2.tv_nsec - t1.tv_nsec);
+        clflush(dram_addr + offset, object_size);
     }
-    return total_delay;
+    return total_delay / start_index_len;
 }
 
 
