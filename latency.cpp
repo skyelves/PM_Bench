@@ -28,7 +28,7 @@ using namespace std::chrono;
 string pm_file = "/media/pmem0/ke/pm_bench_pm";
 string ssd_file = "/home/ke_wang/test/pm_bench_ssd";
 uint64_t object_size = 256;
-uint64_t alloc_size = ((uint64_t)32)<<30; // 32GB
+uint64_t alloc_size = ((uint64_t) 32) << 30; // 32GB
 
 inline void mfence(void) {
     asm volatile("mfence":: :"memory");
@@ -76,6 +76,7 @@ void create_index(uint64_t _size) {
     uint64_t right_limit = alloc_size - 2 * _size;
     for (int i = 0; i < start_index_len; ++i) {
         start_index[i] = rng_next(&r) % right_limit;
+        cout << start_index[i] << endl;
     }
 }
 
@@ -178,7 +179,7 @@ void benchmark(uint64_t _size) {
     }
     content[_size - 1] = '\0';
 
-    start_index_len = (2<<23) / _size;
+    start_index_len = (2 << 23) / _size;
     create_index(_size);
 
     write_dram_latency = write_dram(_size);
@@ -193,9 +194,8 @@ void benchmark(uint64_t _size) {
 }
 
 int main(int argc, char *argv[]) {
-    sscanf(argv[1], "%" SCNu64 , &object_size);
-//    sscanf(argv[2], "%" SCNu64 , &alloc_size); //GB
-//    alloc_size = alloc_size << 30;
+    sscanf(argv[1], "%" SCNu64, &object_size);
+//    sscanf(argv[2], "%" SCNu64 , &alloc_size);
     init_addr();
     benchmark(object_size);
     return 0;
