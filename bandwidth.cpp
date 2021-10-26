@@ -36,7 +36,7 @@ double *addr_nvm0[NUM_THREADS] = {nullptr}, *addr_nvm1[NUM_THREADS] = {nullptr},
 uint64_t size = 1 << 20; //1GB
 uint64_t cache_line_size = 64; //64Byte
 uint64_t len = size / sizeof(uint64_t);
-uint64_t alloc_size = ((uint64_t) 4) << 30; // 32GB
+uint64_t alloc_size = ((uint64_t) 4) << 30; // 4GB
 
 void clflush_array(double *addr[]) {
     for (int j = 0; j < NUM_THREADS; ++j) {
